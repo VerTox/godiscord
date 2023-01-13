@@ -4,12 +4,25 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 )
 
-//Embed is a struct representing a Discord embed object
+type WebhookPersonal struct {
+	Type          int         `json:"type"`
+	Id            string      `json:"id"`
+	Name          string      `json:"name"`
+	Avatar        string      `json:"avatar"`
+	ChannelId     string      `json:"channel_id"`
+	GuildId       string      `json:"guild_id"`
+	ApplicationId interface{} `json:"application_id"`
+	Token         string      `json:"token"`
+}
+
+// Embed is a struct representing a Discord embed object
 type Embed struct {
 	Username  string         `json:"username"`
 	AvatarURL string         `json:"avatar_url"`
@@ -17,7 +30,7 @@ type Embed struct {
 	Embeds    []EmbedElement `json:"embeds"`
 }
 
-//EmbedElement is a struct representing an Embed element of the Embed struct
+// EmbedElement is a struct representing an Embed element of the Embed struct
 type EmbedElement struct {
 	Author      Author  `json:"author"`
 	Title       string  `json:"title"`
@@ -30,32 +43,32 @@ type EmbedElement struct {
 	Footer      Footer  `json:"footer"`
 }
 
-//Author represents the author of the embed
+// Author represents the author of the embed
 type Author struct {
 	Name    string `json:"name"`
 	URL     string `json:"url"`
 	IconURL string `json:"icon_url"`
 }
 
-//Field represents a field in an embed
+// Field represents a field in an embed
 type Field struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
 	Inline bool   `json:"inline,omitempty"`
 }
 
-//Footer represents the footer of an embed
+// Footer represents the footer of an embed
 type Footer struct {
 	Text    string `json:"text"`
 	IconURL string `json:"icon_url,omitempty"`
 }
 
-//Image represents the image of an embed
+// Image represents the image of an embed
 type Image struct {
 	URL string `json:"url"`
 }
 
-//Webhook represents a webhook
+// Webhook represents a webhook
 type Webhook struct {
 	URL     string `json:"webhook"`
 	IconURL string `json:"icon_url"`
@@ -63,8 +76,8 @@ type Webhook struct {
 	Color   string `json:"color"`
 }
 
-//NewEmbed creates a new embed object.
-//Returns Embed.
+// NewEmbed creates a new embed object.
+// Returns Embed.
 func NewEmbed(Title, Description, URL string) Embed {
 	e := Embed{}
 	emb := EmbedElement{Title: Title, Description: Description, URL: URL}
@@ -72,7 +85,7 @@ func NewEmbed(Title, Description, URL string) Embed {
 	return e
 }
 
-//SetAuthor sets the author of the Embed
+// SetAuthor sets the author of the Embed
 func (e *Embed) SetAuthor(Name, URL, IconURL string) {
 	if len(e.Embeds) == 0 {
 		emb := EmbedElement{Author: Author{Name, URL, IconURL}}
@@ -82,8 +95,8 @@ func (e *Embed) SetAuthor(Name, URL, IconURL string) {
 	}
 }
 
-//SetColor takes in a hex code and sets the color of the Embed.
-//Returns an error if the hex is invalid
+// SetColor takes in a hex code and sets the color of the Embed.
+// Returns an error if the hex is invalid
 func (e *Embed) SetColor(color string) error {
 	color = strings.Replace(color, "0x", "", -1)
 	color = strings.Replace(color, "0X", "", -1)
@@ -96,8 +109,8 @@ func (e *Embed) SetColor(color string) error {
 	return nil
 }
 
-//SetThumbnail sets the thumbnail of the embed.
-//Returns an error if the embed was not initialized properly
+// SetThumbnail sets the thumbnail of the embed.
+// Returns an error if the embed was not initialized properly
 func (e *Embed) SetThumbnail(URL string) error {
 	if len(e.Embeds) < 1 {
 		return errors.New("Invalid Embed passed in, Embed.Embeds must have at least one EmbedElement")
@@ -106,8 +119,8 @@ func (e *Embed) SetThumbnail(URL string) error {
 	return nil
 }
 
-//SetImage sets the image of the embed
-//Returns an error if the embed was not initialized properly
+// SetImage sets the image of the embed
+// Returns an error if the embed was not initialized properly
 func (e *Embed) SetImage(URL string) error {
 	if len(e.Embeds) < 1 {
 		return errors.New("Invalid Embed passed in, Embed.Embeds must have at least one EmbedElement")
@@ -116,8 +129,8 @@ func (e *Embed) SetImage(URL string) error {
 	return nil
 }
 
-//SetFooter sets the footer of the embed.
-//Returns an error if the embed was not initialized properly
+// SetFooter sets the footer of the embed.
+// Returns an error if the embed was not initialized properly
 func (e *Embed) SetFooter(Text, IconURL string) error {
 	if len(e.Embeds) < 1 {
 		return errors.New("Invalid Embed passed in, Embed.Embeds must have at least one EmbedElement")
@@ -126,8 +139,8 @@ func (e *Embed) SetFooter(Text, IconURL string) error {
 	return nil
 }
 
-//AddField adds a frield to the Embed.
-//Returns an error if the embed was not initialized properly
+// AddField adds a frield to the Embed.
+// Returns an error if the embed was not initialized properly
 func (e *Embed) AddField(Name, Value string, Inline bool) error {
 	if len(e.Embeds) < 1 {
 		return errors.New("Invalid Embed passed in, Embed.Embeds must have at least one EmbedElement")
@@ -136,8 +149,8 @@ func (e *Embed) AddField(Name, Value string, Inline bool) error {
 	return nil
 }
 
-//SendToWebhook sents the Embed to a webhook.
-//Returns error if embed was invalid or there was an error posting to the webhook.
+// SendToWebhook sents the Embed to a webhook.
+// Returns error if embed was invalid or there was an error posting to the webhook.
 func (e *Embed) SendToWebhook(Webhook string) error {
 	embed, marshalErr := json.Marshal(e)
 	if marshalErr != nil {
@@ -148,4 +161,32 @@ func (e *Embed) SendToWebhook(Webhook string) error {
 		return postErr
 	}
 	return nil
+}
+
+func (e *Embed) FulfillPersonal(Webhook string) error {
+	get, err := http.Get(Webhook)
+	if err != nil {
+		return err
+	}
+	rawData, err := io.ReadAll(get.Body)
+	if err != nil {
+		return err
+	}
+	body := WebhookPersonal{}
+	err = json.Unmarshal(rawData, &body)
+	if err != nil {
+		return err
+	}
+	if e.Username == "" {
+		e.Username = body.Name
+	}
+	if e.AvatarURL == "" {
+		e.AvatarURL = body.getAvatarLink()
+	}
+	return nil
+}
+
+func (p WebhookPersonal) getAvatarLink() string {
+	baseUrl := "https://cdn.discordapp.com/avatars/"
+	return fmt.Sprintf("%s/%s/%s", baseUrl, p.Id, p.Avatar)
 }
